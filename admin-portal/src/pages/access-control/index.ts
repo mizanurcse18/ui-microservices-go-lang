@@ -1,0 +1,1 @@
+export { AccessControlUserManagementPage } from './user-management';
