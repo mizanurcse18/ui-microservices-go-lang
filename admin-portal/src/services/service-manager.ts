@@ -1,5 +1,14 @@
 import { authService } from './modules/auth';
 import { userService } from './modules/user';
+import { 
+  defaultErrorHandler, 
+  ApiErrorHandler,
+  ERROR_CODES,
+  isAuthenticationError,
+  isAuthorizationError,
+  requiresRedirectToLogin,
+  getErrorMessage
+} from './error-handler';
 
 /**
  * ServiceManager provides a centralized way to access all services
@@ -9,6 +18,7 @@ import { userService } from './modules/user';
 class ServiceManager {
   static readonly auth = authService;
   static readonly user = userService;
+  static readonly errorHandler = defaultErrorHandler;
 
   /**
    * Initialize all services with the proper configuration
@@ -22,4 +32,13 @@ class ServiceManager {
   }
 }
 
-export { ServiceManager };
+// Re-export error handling utilities for convenience
+export {
+  ServiceManager,
+  ApiErrorHandler,
+  ERROR_CODES,
+  isAuthenticationError,
+  isAuthorizationError,
+  requiresRedirectToLogin,
+  getErrorMessage
+};

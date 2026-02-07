@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   ColumnDef,
   getCoreRowModel,
@@ -55,45 +55,13 @@ import {
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { userService } from '@/services/modules/user';
 import { ContentLoader } from '@/components/common/content-loader';
-
-// User data interface based on API response
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  is_active: boolean;
-  is_admin: boolean;
-}
-
-// Configuration interfaces
-interface ToolbarButtonConfig {
-  id: string;
-  label: string;
-  icon: React.ReactNode;
-  variant?: 'primary' | 'outline' | 'secondary' | 'destructive' | 'ghost' | 'mono' | 'dashed' | 'dim' | 'foreground' | 'inverse';
-  onClick: () => void;
-}
-
-interface ColumnConfig {
-  id: string;
-  title: string;
-  accessorKey?: string;
-  accessorFn?: (row: User) => any;
-  enableSorting?: boolean;
-  enableHiding?: boolean;
-  size?: number;
-  cell?: (props: { row: Row<User> }) => React.ReactNode;
-}
-
-interface DataGridConfig {
-  columns: ColumnConfig[];
-  enableRowSelection?: boolean;
-  enableColumnVisibility?: boolean;
-  enableColumnPinning?: boolean;
-  enableColumnMoving?: boolean;
-  pageSizeOptions?: number[];
-  defaultPageSize?: number;
-}
+import { 
+  User, 
+  PaginatedUsersResponse, 
+  ToolbarButtonConfig, 
+  ColumnConfig, 
+  DataGridConfig 
+} from '@/components/ui/data-grid/data-grid.types';
 
 // Configuration for the user table
 const toolbarButtonsConfig: ToolbarButtonConfig[] = [
@@ -126,7 +94,7 @@ const toolbarButtonsConfig: ToolbarButtonConfig[] = [
   }
 ];
 
-const dataGridConfig: DataGridConfig = {
+const dataGridConfig: DataGridConfig<User> = {
   enableRowSelection: true,
   enableColumnVisibility: true,
   enableColumnPinning: true,
@@ -160,7 +128,7 @@ const dataGridConfig: DataGridConfig = {
     {
       id: 'status',
       title: 'Status',
-      accessorFn: (row) => row.is_active,
+      accessorFn: (row: User) => row.is_active,
       enableSorting: true,
       size: 120,
       cell: ({ row }) => (
@@ -178,7 +146,7 @@ const dataGridConfig: DataGridConfig = {
     {
       id: 'role',
       title: 'Role',
-      accessorFn: (row) => row.is_admin,
+      accessorFn: (row: User) => row.is_admin,
       enableSorting: true,
       size: 120,
       cell: ({ row }) => (
@@ -241,19 +209,110 @@ const UserTable = () => {
     pageIndex: 0,
     pageSize: dataGridConfig.defaultPageSize || 10,
   });
+  
+  // State to track if we're currently fetching data to prevent unwanted state updates
+  const [isFetching, setIsFetching] = useState<boolean>(false);
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'name', desc: false },
   ]);
+  
+  // Track if this is the initial render
+  const isFirstRender = useRef(true);
+  
+  // Memoize sorting to prevent unnecessary re-renders
+  const memoizedSorting = useMemo(() => sorting, [sorting[0]?.id, sorting[0]?.desc]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [totalUsers, setTotalUsers] = useState<number>(0);
+  const [totalPages, setTotalPages] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch users from API
+  // Refs to track the current request ID and previous sorting state
+  const currentRequestId = useRef<string>('');
+  const previousSortingRef = useRef<string>(JSON.stringify(sorting));
+  
+  // Initial data load - only run if no data exists
   useEffect(() => {
+    // Skip if we already have data or if this isn't the first render
+    if (users.length > 0 || !isFirstRender.current) {
+      console.log('🔄 Skipping initial load - data already exists or not first render');
+      isFirstRender.current = false;
+      return;
+    }
+    
+    const loadInitialData = async () => {
+      console.log('🔄 Loading initial data');
+      try {
+        setLoading(true);
+        
+        // Prepare request filters for initial load
+        const filters = {
+          page: 1,
+          pageSize: dataGridConfig.defaultPageSize || 10,
+          sortBy: 'name',
+          sortOrder: 'asc' as 'asc' | 'desc'
+        };
+        
+        console.log(`🔍 Initial API Request: Page ${filters.page}, PageSize: ${filters.pageSize}`);
+        
+        // Use userService to make the API request
+        const response = await userService.getUsersPaginated(filters);
+        
+        if (response.success && response.data) {
+          // Handle the API response format
+          const paginatedData = response.data as PaginatedUsersResponse;
+          setUsers(paginatedData.users);
+          setTotalUsers(paginatedData.total);
+          setTotalPages(paginatedData.totalPages);
+        } else {
+          setError(response.error || 'Failed to fetch users');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error occurred');
+        console.error('Error fetching initial users:', err);
+      } finally {
+        setLoading(false);
+        isFirstRender.current = false; // Mark that initial load is complete
+      }
+    };
+    
+    loadInitialData();
+  }, []); // Empty dependency array for initial load only
+  
+  // Fetch users from API when pagination/sorting changes
+  useEffect(() => {
+    // Skip if this is the first render or if we don't have initial data yet
+    if (isFirstRender.current || users.length === 0) {
+      console.log('🔄 Skipping pagination effect - initial render or no data');
+      return;
+    }
+    
+    console.log(`🔄 Effect triggered - Page: ${pagination.pageIndex}, PageSize: ${pagination.pageSize}`);
+    console.log(`🔄 Pagination object:`, pagination);
+    console.log(`🔄 Sorting object:`, sorting);
+    console.log(`🔄 Memoized sorting:`, memoizedSorting);
+    console.log(`🔄 Previous sorting: ${previousSortingRef.current}`);
+    
+    // Check if sorting actually changed
+    const currentSorting = JSON.stringify(memoizedSorting);
+    const sortingChanged = previousSortingRef.current !== currentSorting;
+    
+    // Only update previous sorting if it actually changed
+    if (sortingChanged) {
+      previousSortingRef.current = currentSorting;
+      console.log(`🔄 Sorting changed: ${currentSorting}`);
+    }
+    
+    // Generate a unique request ID for this specific request
+    const requestId = `${pagination.pageIndex}-${pagination.pageSize}-${currentSorting}`;
+    currentRequestId.current = requestId;
+    
     const fetchUsers = async () => {
+      setIsFetching(true);
+      
       try {
         setLoading(true);
         
@@ -265,25 +324,51 @@ const UserTable = () => {
           sortOrder: (sorting[0]?.desc ? 'desc' : 'asc') as 'asc' | 'desc'
         };
         
+        console.log(`🔍 API Request: Page ${filters.page}, PageSize: ${filters.pageSize}, Sorting: ${currentSorting}`);
+        
         // Use userService to make the API request
         const response = await userService.getUsersPaginated(filters);
-                
-        if (response.success && response.data) {
-          // Handle the API response format
-          setUsers(response.data.users);
-        } else {
-          setError(response.error || 'Failed to fetch users');
+        
+        // Only update state if this response is for the most recent request
+        // and the pagination state hasn't changed since the request was made
+        const isCurrentRequest = currentRequestId.current === requestId;
+        const paginationStillValid = 
+          pagination.pageIndex === (filters.page - 1) && 
+          pagination.pageSize === filters.pageSize;
+        
+        if (isCurrentRequest && paginationStillValid) {
+          if (response.success && response.data) {
+            // Handle the API response format
+            const paginatedData = response.data as PaginatedUsersResponse;
+            setUsers(paginatedData.users);
+            setTotalUsers(paginatedData.total);
+            setTotalPages(paginatedData.totalPages);
+          } else {
+            setError(response.error || 'Failed to fetch users');
+          }
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error occurred');
-        console.error('Error fetching users:', err);
+        // Only update error state if this is the most recent request
+        if (currentRequestId.current === requestId) {
+          setError(err instanceof Error ? err.message : 'Unknown error occurred');
+          console.error('Error fetching users:', err);
+        }
       } finally {
-        setLoading(false);
+        // Only update loading state if this is the most recent request
+        if (currentRequestId.current === requestId) {
+          setLoading(false);
+        }
+        setIsFetching(false);
       }
     };
 
     fetchUsers();
-  }, [pagination.pageIndex, pagination.pageSize, sorting]);
+    
+    // Return cleanup function to clear request ID on unmount
+    return () => {
+      currentRequestId.current = '';
+    };
+  }, [pagination.pageIndex, pagination.pageSize, memoizedSorting]);
 
   // Filter users based on search query and status
   const filteredData = useMemo(() => {
@@ -379,14 +464,16 @@ const UserTable = () => {
   const table = useReactTable({
     columns,
     data: filteredData,
-    pageCount: Math.ceil((users?.length || 0) / pagination.pageSize),
+    pageCount: totalPages, // Use the actual total pages from API
     getRowId: (row: User) => String(row.id),
     state: {
       pagination,
-      sorting,
+      sorting: memoizedSorting,
       rowSelection,
     },
     columnResizeMode: 'onChange',
+    // Use manual pagination to prevent react-table from managing page state
+    manualPagination: true,
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
     enableRowSelection: dataGridConfig.enableRowSelection,
@@ -445,7 +532,7 @@ const UserTable = () => {
   return (
     <DataGrid
       table={table}
-      recordCount={filteredData?.length || 0}
+      recordCount={totalUsers} // Show the total number of users from API
       tableLayout={{
         columnsPinnable: dataGridConfig.enableColumnPinning ?? true,
         columnsMovable: dataGridConfig.enableColumnMoving ?? true,

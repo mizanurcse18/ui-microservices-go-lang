@@ -80,7 +80,7 @@ class AuthService extends BaseApiService {
   }
 
   async refreshToken(refreshToken: string): Promise<ApiResponse<LoginResponse>> {
-    return await this.postModule<LoginResponse, { refresh_token: string }>('auth', 'refresh-token', { refresh_token: refreshToken });
+    return await this.postModule<LoginResponse, { refresh_token: string }>('auth', 'refresh', { refresh_token: refreshToken });
   }
 
   async logout(userId: string): Promise<ApiResponse<any>> {

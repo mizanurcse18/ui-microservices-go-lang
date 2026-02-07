@@ -1,10 +1,14 @@
 import { supabase } from '@/lib/supabase';
 import { API_MODULES, type ApiModule } from '@/config/api-modules';
+import { defaultErrorHandler } from '@/services/error-handler';
 
 interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   success: boolean;
+  status_code?: string;
+  message?: string;
+  status?: string;
 }
 
 class BaseApiService {
@@ -210,36 +214,6 @@ class BaseApiService {
     }
   }
 
-  // Generic DELETE request
-  async delete<T = any>(endpoint: string, headers: HeadersInit = {}): Promise<ApiResponse<T>> {
-    try {
-      const token = await this.getAuthToken();
-      const url = this.buildUrl(endpoint);
-      
-      console.log('Making DELETE request to:', url); // Debug log
-      
-      const response = await fetch(url, {
-        method: 'DELETE',
-        headers: {
-          ...this.defaultHeaders,
-          ...headers,
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-
-      console.log('DELETE response status:', response.status); // Debug log
-      
-      const result = await this.handleResponse<T>(response);
-      return result;
-    } catch (error) {
-      console.error('DELETE request failed:', error); // Debug log
-      return {
-        error: error instanceof Error ? error.message : 'Network error occurred',
-        success: false,
-      };
-    }
-  }
-
   protected async getAuthToken(): Promise<string | null> {
     // First try to get from localStorage (for custom API tokens)
     const token = localStorage.getItem('access_token');
@@ -291,41 +265,59 @@ class BaseApiService {
   protected async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     if (!response.ok) {
       const errorData = await response.text();
-      return {
+      let errorResponse: any = {
         error: errorData || `HTTP error! status: ${response.status}`,
         success: false,
       };
+  
+      // Try to parse JSON error response
+      try {
+        const parsedError = JSON.parse(errorData);
+        errorResponse = {
+          ...errorResponse,
+          ...parsedError,
+          status_code: parsedError.status_code || response.status.toString()
+        };
+      } catch (e) {
+        // If parsing fails, use the raw error with HTTP status mapping
+        errorResponse.status_code = response.status.toString();
+      }
+  
+      // Process the error through the error handler
+      const processedResponse = defaultErrorHandler.processApiResponse(errorResponse);
+      return processedResponse as ApiResponse<T>;
     }
-
+  
     if (response.status === 204) {
       // No content
       return { success: true } as ApiResponse<T>;
     }
-
+  
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
       const responseData = await response.json();
-      
-      // Check if response has the nested data structure { status, data, message }
-      if (responseData && typeof responseData === 'object' && 'status' in responseData && 'data' in responseData) {
-        if (responseData.status === 'success') {
-          return { data: responseData.data as T, success: true };
+        
+      // Check if response has the nested data structure { status, data, message, status_code }
+      if (responseData && typeof responseData === 'object') {
+        // Process through error handler to catch any error codes in successful responses
+        const processedResponse = defaultErrorHandler.processApiResponse({
+          ...responseData,
+          success: responseData.status === 'success',
+          data: responseData.data,
+          error: responseData.message
+        });
+          
+        if (processedResponse.success) {
+          return { data: processedResponse.data as T, success: true };
         } else {
-          // Check if this is an invalid/expired token error
-          const errorMessage = responseData.message || 'API request failed';
-          if (errorMessage.includes('Invalid or expired token') || errorMessage.includes('Unauthorized - invalid token')) {
-            // Try to refresh the access token
-            const refreshSuccess = await this.refreshAccessToken();
-            if (refreshSuccess) {
-              // If refresh succeeded, we could potentially retry the original request
-              // For now, we'll return the error and let the calling code handle retry logic
-              console.log('Token was refreshed, but request needs to be retried');
-            }
-          }
-          return { error: errorMessage, success: false };
+          return { 
+            error: processedResponse.message || processedResponse.error, 
+            success: false,
+            status_code: processedResponse.status_code
+          };
         }
       }
-      
+        
       // Otherwise return the data directly
       return { data: responseData, success: true };
     } else {

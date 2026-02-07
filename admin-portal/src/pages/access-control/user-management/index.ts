@@ -1,1 +1,1 @@
-export { AccessControlUserManagementPage } from './access-control-user-management-page';
+export { AccessControlUserManagementPage } from './user-management';

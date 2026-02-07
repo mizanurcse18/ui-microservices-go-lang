@@ -5,6 +5,9 @@ interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   success: boolean;
+  status_code?: string;
+  message?: string;
+  status?: string;
 }
 
 class ApiClient {
