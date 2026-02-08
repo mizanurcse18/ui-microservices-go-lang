@@ -119,6 +119,8 @@ const dataGridConfig: DataGridConfig<User> = {
       accessorKey: 'name',
       enableSorting: true,
       isFilter: true,
+      defaultOperator: 'like',
+      supportedOperators: ['eq', 'ne', 'like'],
       size: 200
     },
     {
@@ -127,6 +129,8 @@ const dataGridConfig: DataGridConfig<User> = {
       accessorKey: 'email',
       enableSorting: true,
       isFilter: true,
+      defaultOperator: 'like',
+      supportedOperators: ['eq', 'ne', 'like'],
       size: 250
     },
     {
@@ -134,6 +138,9 @@ const dataGridConfig: DataGridConfig<User> = {
       title: 'Status',
       accessorFn: (row: User) => row.is_active,
       enableSorting: true,
+      isFilter: true,
+      defaultOperator: 'eq',
+      supportedOperators: ['eq', 'ne'],
       size: 120,
       cell: ({ row }) => (
         <Badge
@@ -152,6 +159,9 @@ const dataGridConfig: DataGridConfig<User> = {
       title: 'Role',
       accessorFn: (row: User) => row.is_admin,
       enableSorting: true,
+      isFilter: true,
+      defaultOperator: 'eq',
+      supportedOperators: ['eq', 'ne'],
       size: 120,
       cell: ({ row }) => (
         <Badge
@@ -261,7 +271,7 @@ const UserTable = () => {
           pageSize: dataGridConfig.defaultPageSize || 10,
           sortBy: 'name',
           sortOrder: 'asc' as 'asc' | 'desc',
-          columnFilters: []
+          columnFilters: [] as Array<{ id: string; value: any; operator?: string }>
         };
         
         console.log(`🔍 Initial API Request: Page ${filters.page}, PageSize: ${filters.pageSize}`);
@@ -330,7 +340,14 @@ const UserTable = () => {
           pageSize: pagination.pageSize,
           sortBy: sorting[0]?.id,
           sortOrder: (sorting[0]?.desc ? 'desc' : 'asc') as 'asc' | 'desc',
-          columnFilters: columnFilters
+          columnFilters: columnFilters.map(filter => {
+            const filterValue = filter.value as { value: string; operator: string } | string;
+            return {
+              id: filter.id,
+              value: typeof filterValue === 'object' && filterValue !== null ? filterValue.value : filterValue,
+              operator: typeof filterValue === 'object' && filterValue !== null ? filterValue.operator : 'like'
+            };
+          })
         };
         
         console.log(`🔍 API Request: Page ${filters.page}, PageSize: ${filters.pageSize}, Sorting: ${currentSorting}`);
@@ -463,6 +480,8 @@ const UserTable = () => {
                     column={column} 
                     placeholder={`Filter ${config.title}...`} 
                     className="mt-1"
+                    defaultOperator={config.defaultOperator}
+                    supportedOperators={config.supportedOperators}
                   />
                 )}
               </div>
