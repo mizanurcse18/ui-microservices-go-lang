@@ -16,6 +16,7 @@ interface UserFilters {
   sortOrder?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
+  columnFilters?: Array<{ id: string; value: any }>;
 }
 
 interface PaginatedUsersResponse {
@@ -57,6 +58,15 @@ class UserService extends BaseApiService {
         field: filters.sortBy,
         direction: filters.sortOrder || 'asc'
       }];
+    }
+    
+    // Add column filters if specified
+    if (filters?.columnFilters && filters.columnFilters.length > 0) {
+      requestBody.filters = filters.columnFilters.map(filter => ({
+        field: filter.id,
+        operator: 'like',
+        value: filter.value
+      }));
     }
 
     console.log('User service making paginated request with body:', requestBody);

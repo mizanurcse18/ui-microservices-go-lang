@@ -11,6 +11,7 @@ import {
   Row,
   RowSelectionState,
   SortingState,
+  ColumnFiltersState,
   useReactTable,
 } from '@tanstack/react-table';
 import { EllipsisVertical, Filter, Search, Settings2, X, Plus, Download, Upload } from 'lucide-react';
@@ -55,6 +56,7 @@ import {
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { userService } from '@/services/modules/user';
 import { ContentLoader } from '@/components/common/content-loader';
+import { ColumnInputFilter } from '@/components/ui/data-grid-column-input-filter';
 import { 
   User, 
   PaginatedUsersResponse, 
@@ -116,6 +118,7 @@ const dataGridConfig: DataGridConfig<User> = {
       title: 'Name',
       accessorKey: 'name',
       enableSorting: true,
+      isFilter: true,
       size: 200
     },
     {
@@ -123,6 +126,7 @@ const dataGridConfig: DataGridConfig<User> = {
       title: 'Email',
       accessorKey: 'email',
       enableSorting: true,
+      isFilter: true,
       size: 250
     },
     {
@@ -216,6 +220,9 @@ const UserTable = () => {
     { id: 'name', desc: false },
   ]);
   
+  // Column filters state
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  
   // Track if this is the initial render
   const isFirstRender = useRef(true);
   
@@ -253,7 +260,8 @@ const UserTable = () => {
           page: 1,
           pageSize: dataGridConfig.defaultPageSize || 10,
           sortBy: 'name',
-          sortOrder: 'asc' as 'asc' | 'desc'
+          sortOrder: 'asc' as 'asc' | 'desc',
+          columnFilters: []
         };
         
         console.log(`🔍 Initial API Request: Page ${filters.page}, PageSize: ${filters.pageSize}`);
@@ -321,7 +329,8 @@ const UserTable = () => {
           page: pagination.pageIndex + 1,
           pageSize: pagination.pageSize,
           sortBy: sorting[0]?.id,
-          sortOrder: (sorting[0]?.desc ? 'desc' : 'asc') as 'asc' | 'desc'
+          sortOrder: (sorting[0]?.desc ? 'desc' : 'asc') as 'asc' | 'desc',
+          columnFilters: columnFilters
         };
         
         console.log(`🔍 API Request: Page ${filters.page}, PageSize: ${filters.pageSize}, Sorting: ${currentSorting}`);
@@ -368,7 +377,7 @@ const UserTable = () => {
     return () => {
       currentRequestId.current = '';
     };
-  }, [pagination.pageIndex, pagination.pageSize, memoizedSorting]);
+  }, [pagination.pageIndex, pagination.pageSize, memoizedSorting, columnFilters]);
 
   // Filter users based on search query and status
   const filteredData = useMemo(() => {
@@ -411,6 +420,18 @@ const UserTable = () => {
     );
   };
 
+  // Reset all filters
+  const resetAllFilters = () => {
+    setColumnFilters([]);
+    setSearchQuery('');
+    setSelectedStatuses([]);
+    // Reset to first page when clearing filters
+    setPagination(prev => ({ ...prev, pageIndex: 0 }));
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = columnFilters.length > 0 || searchQuery.length > 0 || selectedStatuses.length > 0;
+
   // Build columns dynamically from configuration
   const columns = useMemo<ColumnDef<User>[]>(
     () => {
@@ -435,7 +456,16 @@ const UserTable = () => {
           const column: ColumnDef<User> = {
             id: config.id,
             header: ({ column }) => (
-              <DataGridColumnHeader title={config.title} column={column} />
+              <div className="flex flex-col gap-1">
+                <DataGridColumnHeader title={config.title} column={column} />
+                {config.isFilter && (
+                  <ColumnInputFilter 
+                    column={column} 
+                    placeholder={`Filter ${config.title}...`} 
+                    className="mt-1"
+                  />
+                )}
+              </div>
             ),
             enableSorting: config.enableSorting ?? true,
             size: config.size,
@@ -451,6 +481,11 @@ const UserTable = () => {
 
           if (config.cell) {
             column.cell = config.cell;
+          }
+
+          // Add filter component if isFilter is true
+          if (config.isFilter) {
+            column.filterFn = 'includesString';
           }
 
           cols.push(column);
@@ -470,12 +505,15 @@ const UserTable = () => {
       pagination,
       sorting: memoizedSorting,
       rowSelection,
+      columnFilters,
     },
     columnResizeMode: 'onChange',
     // Use manual pagination to prevent react-table from managing page state
     manualPagination: true,
+    manualFiltering: true,
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
     enableRowSelection: dataGridConfig.enableRowSelection,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
@@ -499,6 +537,16 @@ const UserTable = () => {
             {button.label}
           </Button>
         ))}
+        
+        {hasActiveFilters && (
+          <Button
+            variant="outline"
+            onClick={resetAllFilters}
+          >
+            <X size={16} className="me-2" />
+            Clear Filters
+          </Button>
+        )}
         {dataGridConfig.enableColumnVisibility && (
           <DataGridColumnVisibility
             table={table}

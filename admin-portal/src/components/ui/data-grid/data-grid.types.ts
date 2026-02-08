@@ -7,6 +7,26 @@ export interface User {
   email: string;
   is_active: boolean;
   is_admin: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Filter operator types matching backend
+export type FilterOperator = 
+  'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 
+  'like' | 'in' | 'not_in' | 'is_null' | 'is_not_null';
+
+// Filter configuration interface
+export interface FilterConfig {
+  field: string;
+  operator: FilterOperator;
+  value: any;
+}
+
+// Sort configuration interface
+export interface SortConfig {
+  field: string;
+  direction: 'asc' | 'desc';
 }
 
 // API Response interface for paginated users
@@ -34,6 +54,8 @@ export interface ColumnConfig<T = any> {
   accessorFn?: (row: T) => any;
   enableSorting?: boolean;
   enableHiding?: boolean;
+  enableFiltering?: boolean;
+  isFilter?: boolean;
   size?: number;
   cell?: (props: { row: Row<T> }) => React.ReactNode;
 }
