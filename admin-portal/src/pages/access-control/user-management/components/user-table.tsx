@@ -14,7 +14,7 @@ import {
   ColumnFiltersState,
   useReactTable,
 } from '@tanstack/react-table';
-import { EllipsisVertical, Filter, Search, Settings2, X, Plus, Download, Upload } from 'lucide-react';
+import { EllipsisVertical, Settings2, X, Plus, Download, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { toAbsoluteUrl } from '@/lib/helpers';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
@@ -29,7 +29,6 @@ import {
   CardTable,
   CardToolbar,
 } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { DataGrid, useDataGrid } from '@/components/ui/data-grid';
 import { DataGridColumnHeader } from '@/components/ui/data-grid-column-header';
 import { DataGridColumnVisibility } from '@/components/ui/data-grid-column-visibility';
@@ -46,13 +45,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+
+
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { userService } from '@/services/modules/user';
 import { ContentLoader } from '@/components/common/content-loader';
@@ -81,8 +75,28 @@ const toolbarButtonsConfig: ToolbarButtonConfig[] = [
     label: 'Export',
     icon: <Download size={16} />,
     variant: 'outline',
-    onClick: () => {
-      toast.info('Export functionality will be implemented');
+    onClick: async () => {
+      try {
+        const response = await userService.exportUsers('csv', 'all');
+        if (response.success && response.data) {
+          // Create blob and download
+          const blob = new Blob([response.data], { type: 'text/csv' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `users-export-${new Date().toISOString().split('T')[0]}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          toast.success('Users exported successfully');
+        } else {
+          toast.error(response.error || 'Failed to export users');
+        }
+      } catch (error) {
+        console.error('Export error:', error);
+        toast.error('Failed to export users');
+      }
     }
   },
   {
@@ -242,8 +256,7 @@ const UserTable = () => {
   // Memoize sorting to prevent unnecessary re-renders
   const memoizedSorting = useMemo(() => sorting, [sorting[0]?.id, sorting[0]?.desc]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  // Removed searchQuery and selectedStatuses state
   const [users, setUsers] = useState<User[]>([]);
   const [totalUsers, setTotalUsers] = useState<number>(0);
   const [totalPages, setTotalPages] = useState<number>(1);
@@ -426,52 +439,16 @@ const UserTable = () => {
     };
   }, [pagination.pageIndex, pagination.pageSize, memoizedSorting, columnFilters]);
 
-  // Filter users based on search query and status
-  const filteredData = useMemo(() => {
-    let filtered = users;
+  // Use users directly since we removed client-side filtering
+  const filteredData = users;
 
-    // Filter by status
-    if (selectedStatuses.length > 0) {
-      filtered = filtered.filter(user => {
-        const status = user.is_active ? 'Active' : 'Inactive';
-        return selectedStatuses.includes(status);
-      });
-    }
+  // Removed statusCounts since we removed the status filter
 
-    // Filter by search query
-    if (searchQuery) {
-      const searchLower = searchQuery.toLowerCase();
-      filtered = filtered.filter(user =>
-        user.name.toLowerCase().includes(searchLower) ||
-        user.email.toLowerCase().includes(searchLower)
-      );
-    }
-
-    return filtered;
-  }, [users, searchQuery, selectedStatuses]);
-
-  const statusCounts = useMemo(() => {
-    return users.reduce(
-      (acc, user) => {
-        const status = user.is_active ? 'Active' : 'Inactive';
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>,
-    );
-  }, [users]);
-
-  const handleStatusChange = (checked: boolean, value: string) => {
-    setSelectedStatuses(prev =>
-      checked ? [...prev, value] : prev.filter(v => v !== value)
-    );
-  };
+  // Removed handleStatusChange since we removed the status filter
 
   // Reset all filters
   const resetAllFilters = () => {
     setColumnFilters([]);
-    setSearchQuery('');
-    setSelectedStatuses([]);
     // Increment reset key to force re-render of filter components
     setFilterResetKey(prev => prev + 1);
     // Reset to first page when clearing filters
@@ -479,7 +456,7 @@ const UserTable = () => {
   };
 
   // Check if any filters are active
-  const hasActiveFilters = columnFilters.length > 0 || searchQuery.length > 0 || selectedStatuses.length > 0;
+  const hasActiveFilters = columnFilters.length > 0;
 
   // Build columns dynamically from configuration
   const columns = useMemo<ColumnDef<User>[]>(
@@ -644,67 +621,7 @@ const UserTable = () => {
         <CardHeader>
           <CardHeading>
             <div className="flex items-center gap-2.5">
-              <div className="relative">
-                <Search className="size-4 text-muted-foreground absolute start-3 top-1/2 -translate-y-1/2" />
-                <Input
-                  placeholder="Search users..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="ps-9 w-64"
-                />
-                {searchQuery.length > 0 && (
-                  <Button
-                    mode="icon"
-                    variant="ghost"
-                    className="absolute end-1.5 top-1/2 -translate-y-1/2 h-6 w-6"
-                    onClick={() => setSearchQuery('')}
-                  >
-                    <X />
-                  </Button>
-                )}
-              </div>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline">
-                    <Filter />
-                    Status
-                    {selectedStatuses.length > 0 && (
-                      <Badge size="sm" variant="outline">
-                        {selectedStatuses.length}
-                      </Badge>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-48 p-3" align="start">
-                  <div className="space-y-3">
-                    <div className="text-xs font-medium text-muted-foreground">
-                      Filter by Status
-                    </div>
-                    <div className="space-y-3">
-                      {Object.keys(statusCounts).map((status) => (
-                        <div key={status} className="flex items-center gap-2.5">
-                          <Checkbox
-                            id={status}
-                            checked={selectedStatuses.includes(status)}
-                            onCheckedChange={(checked) =>
-                              handleStatusChange(checked === true, status)
-                            }
-                          />
-                          <Label
-                            htmlFor={status}
-                            className="grow flex items-center justify-between font-normal gap-1.5"
-                          >
-                            {status}
-                            <span className="text-muted-foreground">
-                              {statusCounts[status]}
-                            </span>
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
+              {/* Search and status filter removed as requested */}
             </div>
           </CardHeading>
           <Toolbar />

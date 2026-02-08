@@ -113,6 +113,18 @@ class UserService extends BaseApiService {
   async toggleUserStatus(id: string, status: boolean): Promise<ApiResponse<User>> {
     return await this.postModule<User, any>('auth', `users/${id}/status`, { switch: status });
   }
+
+  async exportUsers(format: 'csv' | 'xlsx' = 'csv', scope: 'all' | 'filtered' = 'all'): Promise<ApiResponse<Blob>> {
+    const requestBody = {
+      format,
+      scope
+    };
+
+    console.log('User service making export request with body:', requestBody);
+    
+    // Use centralized endpoint system with module-aware method
+    return await this.postModule<Blob, any>('auth', 'users/export', requestBody);
+  }
 }
 
 // Singleton instance
