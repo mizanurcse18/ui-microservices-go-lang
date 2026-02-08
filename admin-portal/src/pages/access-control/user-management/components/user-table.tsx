@@ -233,6 +233,9 @@ const UserTable = () => {
   // Column filters state
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   
+  // Key to force re-render of filter components when clearing filters
+  const [filterResetKey, setFilterResetKey] = useState(0);
+  
   // Track if this is the initial render
   const isFirstRender = useRef(true);
   
@@ -300,19 +303,25 @@ const UserTable = () => {
     loadInitialData();
   }, []); // Empty dependency array for initial load only
   
-  // Fetch users from API when pagination/sorting changes
+  // Fetch users from API when pagination/sorting/columnFilters changes
   useEffect(() => {
-    // Skip if this is the first render or if we don't have initial data yet
-    if (isFirstRender.current || users.length === 0) {
-      console.log('🔄 Skipping pagination effect - initial render or no data');
+    // Skip if this is the first render (initial data load handles this)
+    if (isFirstRender.current) {
       return;
     }
     
-    console.log(`🔄 Effect triggered - Page: ${pagination.pageIndex}, PageSize: ${pagination.pageSize}`);
-    console.log(`🔄 Pagination object:`, pagination);
-    console.log(`🔄 Sorting object:`, sorting);
-    console.log(`🔄 Memoized sorting:`, memoizedSorting);
-    console.log(`🔄 Previous sorting: ${previousSortingRef.current}`);
+    // Allow API calls when we have data OR when filters are being cleared
+    // (empty result is valid when filters return no matches)
+    if (users.length === 0 && columnFilters.length === 0) {
+      return;
+    }
+    
+    // Only log when there are actual changes or filters
+    if (columnFilters.length > 0 || pagination.pageIndex > 0 || sorting[0]?.id !== 'name') {
+      console.log(`🔄 Effect triggered - Page: ${pagination.pageIndex}, PageSize: ${pagination.pageSize}`);
+      console.log(`🔄 Column filters count: ${columnFilters.length}`);
+      console.log(`🔄 Sorting:`, sorting[0]);
+    }
     
     // Check if sorting actually changed
     const currentSorting = JSON.stringify(memoizedSorting);
@@ -322,6 +331,21 @@ const UserTable = () => {
     if (sortingChanged) {
       previousSortingRef.current = currentSorting;
       console.log(`🔄 Sorting changed: ${currentSorting}`);
+    }
+    
+    // Log filter changes in detail
+    if (columnFilters.length > 0) {
+      console.log(`🔄 Active filters:`, columnFilters.map(f => {
+        const filterValue = f.value as { value: string; operator: string } | string | undefined;
+        return {
+          id: f.id,
+          value: filterValue,
+          operator: typeof filterValue === 'object' && filterValue !== null ? filterValue.operator : 'like'
+        };
+      }));
+    } else if (users.length > 0) {
+      // Log when filters are cleared
+      console.log('🔄 Filters cleared, reloading full dataset');
     }
     
     // Generate a unique request ID for this specific request
@@ -350,7 +374,13 @@ const UserTable = () => {
           })
         };
         
-        console.log(`🔍 API Request: Page ${filters.page}, PageSize: ${filters.pageSize}, Sorting: ${currentSorting}`);
+        // Only log API requests when there are filters or non-default pagination/sorting
+        if (columnFilters.length > 0 || pagination.pageIndex > 0 || sorting[0]?.id !== 'name' || sorting[0]?.desc) {
+          console.log(`🔍 API Request: Page ${filters.page}, PageSize: ${filters.pageSize}, Sorting: ${currentSorting}`);
+          if (columnFilters.length > 0) {
+            console.log(`🔍 Filters sent:`, filters.columnFilters);
+          }
+        }
         
         // Use userService to make the API request
         const response = await userService.getUsersPaginated(filters);
@@ -442,6 +472,8 @@ const UserTable = () => {
     setColumnFilters([]);
     setSearchQuery('');
     setSelectedStatuses([]);
+    // Increment reset key to force re-render of filter components
+    setFilterResetKey(prev => prev + 1);
     // Reset to first page when clearing filters
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
   };
@@ -477,9 +509,10 @@ const UserTable = () => {
                 <DataGridColumnHeader title={config.title} column={column} />
                 {config.isFilter && (
                   <ColumnInputFilter 
+                    key={`${config.id}-${filterResetKey}`}
                     column={column} 
                     placeholder={`Filter ${config.title}...`} 
-                    className="mt-1"
+                    className="mt-1 mb-1"
                     defaultOperator={config.defaultOperator}
                     supportedOperators={config.supportedOperators}
                   />
@@ -512,7 +545,7 @@ const UserTable = () => {
 
       return cols;
     },
-    []
+    [filterResetKey]
   );
 
   const table = useReactTable({

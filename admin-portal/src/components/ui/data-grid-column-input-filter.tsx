@@ -30,17 +30,25 @@ function ColumnInputFilter<TData, TValue>({
   const [value, setValue] = useState<string>('');
   const [operator, setOperator] = useState<FilterOperator>(defaultOperator);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isUpdatingRef = useRef(false);
   
   // Filter operators for this specific column
   const columnOperators = FILTER_OPERATORS.filter(op => 
     supportedOperators.includes(op.value as FilterOperator)
   );
   
-  // Initialize value and operator from column filter
+  // Initialize value and operator from column filter - only when not actively typing
   useEffect(() => {
-    const filterValue = column.getFilterValue() as { value: string; operator: FilterOperator } | string;
+    // Skip synchronization when user is actively typing
+    if (isUpdatingRef.current) return;
     
-    if (typeof filterValue === 'object' && filterValue !== null) {
+    const filterValue = column.getFilterValue() as { value: string; operator: FilterOperator } | string | undefined;
+    
+    if (filterValue === undefined) {
+      // Reset to default state when filter is cleared
+      setValue('');
+      setOperator(defaultOperator);
+    } else if (typeof filterValue === 'object' && filterValue !== null) {
       if (filterValue.value !== undefined && filterValue.value !== value) {
         setValue(filterValue.value || '');
       }
@@ -50,9 +58,29 @@ function ColumnInputFilter<TData, TValue>({
     } else if (typeof filterValue === 'string' && filterValue !== value) {
       setValue(filterValue || '');
     }
-  }, [column, value, operator]);
+  }, [column.getFilterValue(), defaultOperator]); // Add column.getFilterValue() to detect external changes
+  
+  // Cleanup function to reset updating flag
+  useEffect(() => {
+    return () => {
+      isUpdatingRef.current = false;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+  
+  // Reset updating flag when component becomes inactive or when external filter changes
+  useEffect(() => {
+    const filterValue = column.getFilterValue();
+    if ((value === '' && filterValue === undefined) || filterValue !== undefined) {
+      isUpdatingRef.current = false;
+    }
+  }, [value, column.getFilterValue()]);
 
   const handleChange = (newValue: string) => {
+    // Set updating flag to prevent state sync interference
+    isUpdatingRef.current = true;
     setValue(newValue);
     
     // Clear existing timeout
@@ -64,21 +92,27 @@ function ColumnInputFilter<TData, TValue>({
     timeoutRef.current = setTimeout(() => {
       const filterData = newValue ? { value: newValue, operator } : undefined;
       column.setFilterValue(filterData);
+      // Reset updating flag after API call
+      isUpdatingRef.current = false;
     }, 500);
   };
 
   const handleOperatorChange = (newOperator: FilterOperator) => {
+    isUpdatingRef.current = true;
     setOperator(newOperator);
     
     // Apply filter immediately when operator changes
     const filterData = value ? { value, operator: newOperator } : undefined;
     column.setFilterValue(filterData);
+    isUpdatingRef.current = false;
   };
 
   const handleClear = () => {
+    isUpdatingRef.current = true;
     setValue('');
     setOperator(defaultOperator);
     column.setFilterValue(undefined);
+    isUpdatingRef.current = false;
   };
 
   return (
