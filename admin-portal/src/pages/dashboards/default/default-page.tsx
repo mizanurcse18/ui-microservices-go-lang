@@ -31,6 +31,9 @@ const DefaultPage = () => {
   } else if (settings?.layout === 'demo10') {
     return <Demo3Page />;
   }
+
+  // Default to demo1 layout if none is specified
+  return <Demo1LightSidebarPage />;
 };
 
 export { DefaultPage };

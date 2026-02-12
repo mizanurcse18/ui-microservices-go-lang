@@ -30,7 +30,19 @@ export interface Settings {
       headerSticky: boolean;
       headerStickyOffset: number;
     };
+    demo3: {
+      headerSticky: boolean;
+      headerStickyOffset: number;
+    };
+    demo4: {
+      headerSticky: boolean;
+      headerStickyOffset: number;
+    };
     demo5: {
+      headerSticky: boolean;
+      headerStickyOffset: number;
+    };
+    demo6: {
       headerSticky: boolean;
       headerStickyOffset: number;
     };
@@ -38,7 +50,15 @@ export interface Settings {
       headerSticky: boolean;
       headerStickyOffset: number;
     };
+    demo8: {
+      headerSticky: boolean;
+      headerStickyOffset: number;
+    };
     demo9: {
+      headerSticky: boolean;
+      headerStickyOffset: number;
+    };
+    demo10: {
       headerSticky: boolean;
       headerStickyOffset: number;
     };

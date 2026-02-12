@@ -18,6 +18,7 @@ import { EllipsisVertical, Settings2, X, Plus, Download, Upload } from 'lucide-r
 import { toast } from 'sonner';
 import { toAbsoluteUrl } from '@/lib/helpers';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { AddUserDialog } from './add-user-dialog';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Badge, BadgeDot } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -59,56 +60,7 @@ import {
   DataGridConfig 
 } from '@/components/ui/data-grid/data-grid.types';
 
-// Configuration for the user table
-const toolbarButtonsConfig: ToolbarButtonConfig[] = [
-  {
-    id: 'add-user',
-    label: 'Add User',
-    icon: <Plus size={16} />,
-    variant: 'primary',
-    onClick: () => {
-      toast.info('Add User functionality will be implemented');
-    }
-  },
-  {
-    id: 'export',
-    label: 'Export',
-    icon: <Download size={16} />,
-    variant: 'outline',
-    onClick: async () => {
-      try {
-        const response = await userService.exportUsers('csv', 'all');
-        if (response.success && response.data) {
-          // Create blob and download
-          const blob = new Blob([response.data], { type: 'text/csv' });
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `users-export-${new Date().toISOString().split('T')[0]}.csv`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-          toast.success('Users exported successfully');
-        } else {
-          toast.error(response.error || 'Failed to export users');
-        }
-      } catch (error) {
-        console.error('Export error:', error);
-        toast.error('Failed to export users');
-      }
-    }
-  },
-  {
-    id: 'import',
-    label: 'Import',
-    icon: <Upload size={16} />,
-    variant: 'outline',
-    onClick: () => {
-      toast.info('Import functionality will be implemented');
-    }
-  }
-];
+// Configuration for the user table - will be defined inside component to access state
 
 const dataGridConfig: DataGridConfig<User> = {
   enableRowSelection: true,
@@ -237,6 +189,9 @@ const UserTable = () => {
     pageIndex: 0,
     pageSize: dataGridConfig.defaultPageSize || 10,
   });
+  
+  // State for Add User Dialog
+  const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
   
   // State to track if we're currently fetching data to prevent unwanted state updates
   const [isFetching, setIsFetching] = useState<boolean>(false);
@@ -554,6 +509,57 @@ const UserTable = () => {
   const Toolbar = () => {
     const { table } = useDataGrid();
 
+    // Configuration for the user table
+    const toolbarButtonsConfig: ToolbarButtonConfig[] = [
+      {
+        id: 'add-user',
+        label: 'Add User',
+        icon: <Plus size={16} />,
+        variant: 'primary',
+        onClick: () => {
+          setIsAddUserDialogOpen(true);
+        }
+      },
+      {
+        id: 'export',
+        label: 'Export',
+        icon: <Download size={16} />,
+        variant: 'outline',
+        onClick: async () => {
+          try {
+            const response = await userService.exportUsers('csv', 'all');
+            if (response.success && response.data) {
+              // Create blob and download
+              const blob = new Blob([response.data], { type: 'text/csv' });
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `users-export-${new Date().toISOString().split('T')[0]}.csv`;
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              document.body.removeChild(a);
+              toast.success('Users exported successfully');
+            } else {
+              toast.error(response.error || 'Failed to export users');
+            }
+          } catch (error) {
+            console.error('Export error:', error);
+            toast.error('Failed to export users');
+          }
+        }
+      },
+      {
+        id: 'import',
+        label: 'Import',
+        icon: <Upload size={16} />,
+        variant: 'outline',
+        onClick: () => {
+          toast.info('Import functionality will be implemented');
+        }
+      }
+    ];
+
     return (
       <CardToolbar>
         {toolbarButtonsConfig.map(button => (
@@ -607,8 +613,9 @@ const UserTable = () => {
   }
 
   return (
-    <DataGrid
-      table={table}
+    <>
+      <DataGrid
+        table={table}
       recordCount={totalUsers} // Show the total number of users from API
       tableLayout={{
         columnsPinnable: dataGridConfig.enableColumnPinning ?? true,
@@ -637,7 +644,23 @@ const UserTable = () => {
         </CardFooter>
       </Card>
     </DataGrid>
-  );
+    
+    <AddUserDialog 
+      open={isAddUserDialogOpen}
+      onOpenChange={setIsAddUserDialogOpen}
+      onCreate={(userData) => {
+        console.log('Creating user:', userData);
+        // Here you would typically call your user service to create the user
+        // For now, we'll just show a success message
+        toast.success(`User ${userData.name} would be created (implementation needed)`);
+        // In a real implementation, you would:
+        // 1. Call userService.createUser(userData)
+        // 2. Refresh the user table data
+        // 3. Close the dialog
+      }}
+    />
+  </>
+);
 };
 
 export { UserTable };
