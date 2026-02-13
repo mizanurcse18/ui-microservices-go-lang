@@ -93,15 +93,12 @@ class UserService extends BaseApiService {
   }
 
   async getUserById(id: string): Promise<ApiResponse<User>> {
-    return await this.get<User>(`/users/${id}`);
+    return await this.getModule<User>('auth', `users/${id}`);
   }
 
-  async createUser(userData: Omit<User, 'id'>): Promise<ApiResponse<User>> {
-    return await this.postModule<User, any>('auth', 'users', userData);
-  }
-
-  async updateUser(id: string, userData: Partial<User>): Promise<ApiResponse<User>> {
-    return await this.postModule<User, any>('auth', `users/${id}`, userData);
+  async saveUser(userData: User | Omit<User, 'id'>): Promise<ApiResponse<User>> {
+    // Always use the same endpoint for both create and update
+    return await this.postModule<User, any>('auth', 'users/create', userData);
   }
 
   async deleteUser(id: string): Promise<ApiResponse<void>> {

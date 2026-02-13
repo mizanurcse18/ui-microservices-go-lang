@@ -94,11 +94,11 @@ class ApiErrorHandler {
         this.handleAuthorizationError(errorCode, errorMessage);
       }
 
-      // Return the response with processed error information
+      // Return the response with processed error information, preserving original message
       return {
         ...response,
         status_code: errorCode,
-        message: getErrorMessage(errorCode)
+        message: response.message || getErrorMessage(errorCode)
       };
     }
 

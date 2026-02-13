@@ -18,7 +18,7 @@ import { EllipsisVertical, Settings2, X, Plus, Download, Upload } from 'lucide-r
 import { toast } from 'sonner';
 import { toAbsoluteUrl } from '@/lib/helpers';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
-import { AddUserDialog } from './add-user-dialog';
+import { UserDialog } from './user-dialog';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Badge, BadgeDot } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -77,7 +77,6 @@ const dataGridConfig: DataGridConfig<User> = {
         enableSorting: false,
         enableHiding: false,
         size: 51,
-        cell: ({ row }) => <DataGridTableRowSelect row={row} />
       },
     {
       id: 'name',
@@ -108,17 +107,6 @@ const dataGridConfig: DataGridConfig<User> = {
       defaultOperator: 'eq',
       supportedOperators: ['eq', 'ne'],
       size: 120,
-      cell: ({ row }) => (
-        <Badge
-          size="lg"
-          variant={row.original.is_active ? 'success' : 'secondary'}
-          appearance="light"
-          shape="circle"
-        >
-          <BadgeDot className={row.original.is_active ? 'bg-success' : 'bg-secondary'} />
-          {row.original.is_active ? 'Active' : 'Inactive'}
-        </Badge>
-      )
     },
     {
       id: 'role',
@@ -129,60 +117,17 @@ const dataGridConfig: DataGridConfig<User> = {
       defaultOperator: 'eq',
       supportedOperators: ['eq', 'ne'],
       size: 120,
-      cell: ({ row }) => (
-        <Badge
-          size="lg"
-          variant={row.original.is_admin ? 'primary' : 'info'}
-          appearance="light"
-        >
-          {row.original.is_admin ? 'Admin' : 'User'}
-        </Badge>
-      )
     },
     {
       id: 'actions',
       title: 'Actions',
       enableSorting: false,
       size: 80,
-      cell: ({ row }) => <ActionsCell row={row} />
     }
   ]
 };
 
-function ActionsCell({ row }: { row: Row<User> }) {
-  const { copyToClipboard } = useCopyToClipboard();
-  
-  const handleCopyId = () => {
-    copyToClipboard(String(row.original.id));
-    toast.success(`User ID copied: ${row.original.id}`);
-  };
 
-  const handleEdit = () => {
-    toast.info(`Edit user: ${row.original.name}`);
-  };
-
-  const handleDelete = () => {
-    toast.warning(`Delete user: ${row.original.name}`);
-  };
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button className="size-7" mode="icon" variant="ghost">
-          <EllipsisVertical />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="bottom" align="end">
-        <DropdownMenuItem onClick={handleEdit}>Edit</DropdownMenuItem>
-        <DropdownMenuItem onClick={handleCopyId}>Copy ID</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={handleDelete}>
-          Delete
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
 
 const UserTable = () => {
   const [pagination, setPagination] = useState<PaginationState>({
@@ -193,6 +138,12 @@ const UserTable = () => {
   // State for Add User Dialog
   const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
   
+  // State for Edit User Dialog
+  const [isEditUserDialogOpen, setIsEditUserDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+
+
+  
   // State to track if we're currently fetching data to prevent unwanted state updates
   const [isFetching, setIsFetching] = useState<boolean>(false);
   const [sorting, setSorting] = useState<SortingState>([
@@ -201,6 +152,11 @@ const UserTable = () => {
   
   // Column filters state
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  
+  // Debug column filters changes
+  useEffect(() => {
+    console.log('📊 Column filters changed:', columnFilters);
+  }, [columnFilters]);
   
   // Key to force re-render of filter components when clearing filters
   const [filterResetKey, setFilterResetKey] = useState(0);
@@ -222,15 +178,8 @@ const UserTable = () => {
   const currentRequestId = useRef<string>('');
   const previousSortingRef = useRef<string>(JSON.stringify(sorting));
   
-  // Initial data load - only run if no data exists
+  // Initial data load - only run on mount
   useEffect(() => {
-    // Skip if we already have data or if this isn't the first render
-    if (users.length > 0 || !isFirstRender.current) {
-      console.log('🔄 Skipping initial load - data already exists or not first render');
-      isFirstRender.current = false;
-      return;
-    }
-    
     const loadInitialData = async () => {
       console.log('🔄 Loading initial data');
       try {
@@ -271,25 +220,97 @@ const UserTable = () => {
     loadInitialData();
   }, []); // Empty dependency array for initial load only
   
+  // Extract fetchUsers function for reusability
+  const fetchUsers = async () => {
+    const requestId = `${pagination.pageIndex}-${pagination.pageSize}-${JSON.stringify(sorting[0])}`;
+    
+    // If there's already a request in flight, don't start a new one
+    if (isFetching && currentRequestId.current === requestId) {
+      console.log('🔄 Request already in flight, skipping...');
+      return;
+    }
+    
+    // SET REQUEST ID BEFORE making the API call to prevent race conditions
+    currentRequestId.current = requestId;
+    setIsFetching(true);
+    
+    try {
+      setLoading(true);
+      
+      // Prepare request filters
+      const filters = {
+        page: pagination.pageIndex + 1,
+        pageSize: pagination.pageSize,
+        sortBy: sorting[0]?.id,
+        sortOrder: (sorting[0]?.desc ? 'desc' : 'asc') as 'asc' | 'desc',
+        columnFilters: columnFilters.map(filter => {
+          const filterValue = filter.value as { value: string; operator: string } | string;
+          return {
+            id: filter.id,
+            value: typeof filterValue === 'object' && filterValue !== null ? filterValue.value : filterValue,
+            operator: typeof filterValue === 'object' && filterValue !== null ? filterValue.operator : 'like'
+          };
+        })
+      };
+      
+      console.log(`🔍 API Request: Page ${filters.page}, PageSize: ${filters.pageSize}, Sorting: ${JSON.stringify(sorting[0])}`);
+      console.log(`🆔 Setting request ID to: ${requestId}`);
+      console.log(`🆔 Current request ID is now: ${currentRequestId.current}`);
+      if (columnFilters.length > 0) {
+        console.log(`🔍 Filters sent:`, filters.columnFilters);
+      }
+      
+      // Use userService to make the API request
+      const response = await userService.getUsersPaginated(filters);
+      
+      // Only update state if this response is for the most recent request
+      // and the pagination state hasn't changed since the request was made
+      const isCurrentRequest = currentRequestId.current === requestId;
+      const paginationStillValid = 
+        pagination.pageIndex === (filters.page - 1) && 
+        pagination.pageSize === filters.pageSize;
+      
+      if (isCurrentRequest && paginationStillValid) {
+        if (response.success && response.data) {
+          // Handle the API response format
+          const paginatedData = response.data as PaginatedUsersResponse;
+          setUsers(paginatedData.users);
+          setTotalUsers(paginatedData.total);
+          setTotalPages(paginatedData.totalPages);
+        } else {
+          setError(response.error || 'Failed to fetch users');
+        }
+      } else {
+        console.log(`🔄 Ignoring stale response. Expected ID: ${requestId}, Current ID: ${currentRequestId.current}`);
+        console.log(`🔄 Pagination still valid: ${paginationStillValid}`);
+      }
+    } catch (err) {
+      // Only update error state if this is the most recent request
+      if (currentRequestId.current === requestId) {
+        setError(err instanceof Error ? err.message : 'Unknown error occurred');
+        console.error('Error fetching users:', err);
+      }
+    } finally {
+      // Only update loading state if this is the most recent request
+      if (currentRequestId.current === requestId) {
+        setLoading(false);
+      }
+      setIsFetching(false);
+    }
+  };
+
   // Fetch users from API when pagination/sorting/columnFilters changes
   useEffect(() => {
     // Skip if this is the first render (initial data load handles this)
     if (isFirstRender.current) {
+      isFirstRender.current = false;
       return;
     }
     
-    // Allow API calls when we have data OR when filters are being cleared
-    // (empty result is valid when filters return no matches)
-    if (users.length === 0 && columnFilters.length === 0) {
-      return;
-    }
-    
-    // Only log when there are actual changes or filters
-    if (columnFilters.length > 0 || pagination.pageIndex > 0 || sorting[0]?.id !== 'name') {
-      console.log(`🔄 Effect triggered - Page: ${pagination.pageIndex}, PageSize: ${pagination.pageSize}`);
-      console.log(`🔄 Column filters count: ${columnFilters.length}`);
-      console.log(`🔄 Sorting:`, sorting[0]);
-    }
+    // Log all triggers for debugging
+    console.log(`🔄 Effect triggered - Page: ${pagination.pageIndex}, PageSize: ${pagination.pageSize}`);
+    console.log(`🔄 Column filters count: ${columnFilters.length}`);
+    console.log(`🔄 Sorting:`, sorting[0]);
     
     // Check if sorting actually changed
     const currentSorting = JSON.stringify(memoizedSorting);
@@ -311,8 +332,7 @@ const UserTable = () => {
           operator: typeof filterValue === 'object' && filterValue !== null ? filterValue.operator : 'like'
         };
       }));
-    } else if (users.length > 0) {
-      // Log when filters are cleared
+    } else {
       console.log('🔄 Filters cleared, reloading full dataset');
     }
     
@@ -320,72 +340,6 @@ const UserTable = () => {
     const requestId = `${pagination.pageIndex}-${pagination.pageSize}-${currentSorting}`;
     currentRequestId.current = requestId;
     
-    const fetchUsers = async () => {
-      setIsFetching(true);
-      
-      try {
-        setLoading(true);
-        
-        // Prepare request filters
-        const filters = {
-          page: pagination.pageIndex + 1,
-          pageSize: pagination.pageSize,
-          sortBy: sorting[0]?.id,
-          sortOrder: (sorting[0]?.desc ? 'desc' : 'asc') as 'asc' | 'desc',
-          columnFilters: columnFilters.map(filter => {
-            const filterValue = filter.value as { value: string; operator: string } | string;
-            return {
-              id: filter.id,
-              value: typeof filterValue === 'object' && filterValue !== null ? filterValue.value : filterValue,
-              operator: typeof filterValue === 'object' && filterValue !== null ? filterValue.operator : 'like'
-            };
-          })
-        };
-        
-        // Only log API requests when there are filters or non-default pagination/sorting
-        if (columnFilters.length > 0 || pagination.pageIndex > 0 || sorting[0]?.id !== 'name' || sorting[0]?.desc) {
-          console.log(`🔍 API Request: Page ${filters.page}, PageSize: ${filters.pageSize}, Sorting: ${currentSorting}`);
-          if (columnFilters.length > 0) {
-            console.log(`🔍 Filters sent:`, filters.columnFilters);
-          }
-        }
-        
-        // Use userService to make the API request
-        const response = await userService.getUsersPaginated(filters);
-        
-        // Only update state if this response is for the most recent request
-        // and the pagination state hasn't changed since the request was made
-        const isCurrentRequest = currentRequestId.current === requestId;
-        const paginationStillValid = 
-          pagination.pageIndex === (filters.page - 1) && 
-          pagination.pageSize === filters.pageSize;
-        
-        if (isCurrentRequest && paginationStillValid) {
-          if (response.success && response.data) {
-            // Handle the API response format
-            const paginatedData = response.data as PaginatedUsersResponse;
-            setUsers(paginatedData.users);
-            setTotalUsers(paginatedData.total);
-            setTotalPages(paginatedData.totalPages);
-          } else {
-            setError(response.error || 'Failed to fetch users');
-          }
-        }
-      } catch (err) {
-        // Only update error state if this is the most recent request
-        if (currentRequestId.current === requestId) {
-          setError(err instanceof Error ? err.message : 'Unknown error occurred');
-          console.error('Error fetching users:', err);
-        }
-      } finally {
-        // Only update loading state if this is the most recent request
-        if (currentRequestId.current === requestId) {
-          setLoading(false);
-        }
-        setIsFetching(false);
-      }
-    };
-
     fetchUsers();
     
     // Return cleanup function to clear request ID on unmount
@@ -463,7 +417,81 @@ const UserTable = () => {
             (column as any).accessorFn = config.accessorFn;
           }
 
-          if (config.cell) {
+          // Handle specific cell rendering based on column ID
+          if (config.id === 'status') {
+            column.cell = ({ row }) => (
+              <Badge
+                size="lg"
+                variant={row.original.is_active ? 'success' : 'secondary'}
+                appearance="light"
+                shape="circle"
+              >
+                <BadgeDot className={row.original.is_active ? 'bg-success' : 'bg-secondary'} />
+                {row.original.is_active ? 'Active' : 'Inactive'}
+              </Badge>
+            );
+          } else if (config.id === 'role') {
+            column.cell = ({ row }) => (
+              <Badge
+                size="lg"
+                variant={row.original.is_admin ? 'primary' : 'info'}
+                appearance="light"
+              >
+                {row.original.is_admin ? 'Admin' : 'User'}
+              </Badge>
+            );
+          } else if (config.id === 'actions') {
+            column.cell = ({ row }) => {
+              const { copyToClipboard } = useCopyToClipboard();
+              
+              const handleCopyId = () => {
+                copyToClipboard(String(row.original.id));
+                toast.success(`User ID copied: ${row.original.id}`);
+              };
+
+              const handleEdit = async () => {
+                try {
+                  console.log('📝 Edit button clicked for user:', row.original.id);
+                  // Fetch fresh user data from the API
+                  const response = await userService.getUserById(row.original.id);
+                  
+                  if (response.success && response.data) {
+                    console.log('✅ User data fetched successfully:', response.data);
+                    // Set the editing user with fresh data from the API
+                    setEditingUser(response.data);
+                    setIsEditUserDialogOpen(true);
+                  } else {
+                    toast.error(response.error || 'Failed to fetch user details');
+                  }
+                } catch (error) {
+                  console.error('❌ Error fetching user details:', error);
+                  toast.error('Failed to fetch user details');
+                }
+              };
+
+              const handleDelete = () => {
+                toast.warning(`Delete user: ${row.original.name}`);
+              };
+
+              return (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="size-7" mode="icon" variant="ghost">
+                      <EllipsisVertical />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="bottom" align="end">
+                    <DropdownMenuItem onClick={handleEdit}>Edit</DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleCopyId}>Copy ID</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onClick={handleDelete}>
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+            };
+          } else if (config.cell) {
             column.cell = config.cell;
           }
 
@@ -645,19 +673,22 @@ const UserTable = () => {
       </Card>
     </DataGrid>
     
-    <AddUserDialog 
-      open={isAddUserDialogOpen}
-      onOpenChange={setIsAddUserDialogOpen}
-      onCreate={(userData) => {
-        console.log('Creating user:', userData);
-        // Here you would typically call your user service to create the user
-        // For now, we'll just show a success message
-        toast.success(`User ${userData.name} would be created (implementation needed)`);
-        // In a real implementation, you would:
-        // 1. Call userService.createUser(userData)
-        // 2. Refresh the user table data
-        // 3. Close the dialog
+    {/* Using a single state to track which mode the dialog is in */}
+    <UserDialog
+      open={isAddUserDialogOpen || isEditUserDialogOpen}
+      onOpenChange={(open) => {
+        // Close both dialogs when the dialog is closed
+        setIsAddUserDialogOpen(false);
+        setIsEditUserDialogOpen(false);
       }}
+      user={isEditUserDialogOpen && editingUser ? {
+        id: editingUser.id,
+        name: editingUser.name,
+        email: editingUser.email,
+        password: '',
+        confirmPassword: ''
+      } : undefined}
+      onRefresh={fetchUsers}
     />
   </>
 );

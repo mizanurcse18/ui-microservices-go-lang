@@ -85,6 +85,42 @@ class BaseApiService {
       };
     }
   }
+  protected async getModule<T = any>(
+    moduleName: string, 
+    endpointKey: string, 
+    params?: Record<string, any>,
+    headers: HeadersInit = {}
+  ): Promise<ApiResponse<T>> {
+    try {
+      const token = await this.getAuthToken();
+      const apiVersion = import.meta.env.VITE_API_VERSION_PATH || '/api/v1';
+      const endpointPath = `/${moduleName}${apiVersion}/${endpointKey.replace(/^\//, '')}`;
+      const url = this.buildUrl(endpointPath, params);
+      
+      console.log('Making module GET request to:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          ...this.defaultHeaders,
+          ...headers,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      console.log('Module GET response status:', response.status);
+      
+      const result = await this.handleResponse<T>(response);
+      return result;
+    } catch (error) {
+      console.error('Module GET request failed:', error);
+      return {
+        error: error instanceof Error ? error.message : 'Network error occurred',
+        success: false,
+      };
+    }
+  }
+
   protected async postModule<T = any, D = any>(
     moduleName: string, 
     endpointKey: string, 
@@ -308,12 +344,23 @@ class BaseApiService {
         });
           
         if (processedResponse.success) {
-          return { data: processedResponse.data as T, success: true };
+          // Return complete response preserving all original fields
+          return { 
+            data: processedResponse.data as T, 
+            success: true,
+            message: processedResponse.message,
+            status_code: processedResponse.status_code,
+            status: processedResponse.status
+          };
         } else {
+          // Return complete error response preserving all original fields
           return { 
             error: processedResponse.message || processedResponse.error, 
             success: false,
-            status_code: processedResponse.status_code
+            status_code: processedResponse.status_code,
+            message: processedResponse.message,
+            data: processedResponse.data as T | undefined,
+            status: processedResponse.status
           };
         }
       }
