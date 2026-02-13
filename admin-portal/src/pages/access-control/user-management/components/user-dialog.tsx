@@ -112,7 +112,7 @@ export function UserDialog({ open, onOpenChange, user, onSave, onRefresh }: User
       
       // Include ID for update operations
       if (isEditMode && formData.id) {
-        userData.id = typeof formData.id === 'number' ? formData.id.toString() : formData.id;
+        userData.id = typeof formData.id === 'number' ? formData.id : parseInt(formData.id as string, 10);
       }
       
       // Include password only if provided
