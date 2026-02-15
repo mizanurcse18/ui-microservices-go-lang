@@ -8,7 +8,6 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   PaginationState,
-  Row,
   RowSelectionState,
   SortingState,
   ColumnFiltersState,
@@ -78,7 +77,7 @@ const dataGridConfig = {
   columns: [
     {
       id: 'selection',
-      title: '',
+      title: 'Select',
       accessorKey: 'id',
       enableSorting: false,
       enableHiding: false,
@@ -90,6 +89,7 @@ const dataGridConfig = {
       accessorKey: 'company_logo_path',
       enableSorting: false,
       isFilter: false,
+      enableHiding: false, // Hide the checkbox for this column
       size: 60
     },
     {
@@ -195,8 +195,36 @@ const CompanyTable = () => {
   // Column filters state
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   
+  // Debug column filters changes
+  useEffect(() => {
+    console.log('📊 Column filters changed:', columnFilters);
+  }, [columnFilters]);
+  
+  // Ref for filter change debouncing
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup timeout ref on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+  
   // Key to force re-render of filter components when clearing filters
   const [filterResetKey, setFilterResetKey] = useState(0);
+  
+  // Column visibility state with localStorage persistence
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem('company-table-column-visibility');
+    return saved ? JSON.parse(saved) : {};
+  });
+  
+  // Persist column visibility to localStorage
+  useEffect(() => {
+    localStorage.setItem('company-table-column-visibility', JSON.stringify(columnVisibility));
+  }, [columnVisibility]);
   
   // Track if this is the initial render
   const isFirstRender = useRef(true);
@@ -212,7 +240,6 @@ const CompanyTable = () => {
 
   // Refs to track the current request ID and previous sorting state
   const currentRequestId = useRef<string>('');
-  const previousSortingRef = useRef<string>(JSON.stringify(sorting));
   
   // Initial data load - only run on mount
   useEffect(() => {
@@ -334,7 +361,8 @@ const CompanyTable = () => {
     }
   };
 
-  // Fetch companies from API when pagination/sorting/columnFilters changes
+  // Fetch companies from API when pagination/sorting changes
+  // Note: columnFilters changes are handled separately to prevent instant API calls
   useEffect(() => {
     // Skip if this is the first render (initial data load handles this)
     if (isFirstRender.current) {
@@ -352,7 +380,35 @@ const CompanyTable = () => {
     return () => {
       currentRequestId.current = '';
     };
-  }, [pagination.pageIndex, pagination.pageSize, memoizedSorting, columnFilters]);
+  }, [pagination.pageIndex, pagination.pageSize, memoizedSorting]);
+  
+  // Handle column filters changes with debouncing to prevent instant API calls
+  useEffect(() => {
+    // Skip if this is the first render
+    if (isFirstRender.current) {
+      return;
+    }
+    
+    // Clear existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    // Set new timeout with 800ms debounce for filter changes
+    timeoutRef.current = setTimeout(() => {
+      console.log('🔍 Filter change detected, triggering API call');
+      const requestId = `${pagination.pageIndex}-${pagination.pageSize}-${JSON.stringify(memoizedSorting)}-filter`;
+      currentRequestId.current = requestId;
+      fetchCompanies();
+    }, 800);
+    
+    // Cleanup timeout on unmount or when dependencies change
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [columnFilters]);
 
   // Use companies directly since we removed client-side filtering
   const filteredData = companies;
@@ -401,8 +457,8 @@ const CompanyTable = () => {
                     column={column} 
                     placeholder={`Filter ${config.title}...`} 
                     className="mt-1 mb-1"
-                    defaultOperator={config.defaultOperator}
-                    supportedOperators={config.supportedOperators}
+                    defaultOperator={config.defaultOperator as any}
+                    supportedOperators={config.supportedOperators as any}
                   />
                 )}
               </div>
@@ -415,8 +471,8 @@ const CompanyTable = () => {
             (column as any).accessorKey = config.accessorKey;
           }
 
-          if (config.accessorFn) {
-            (column as any).accessorFn = config.accessorFn;
+          if ((config as any).accessorFn) {
+            (column as any).accessorFn = (config as any).accessorFn;
           }
 
           // Handle specific cell rendering based on column ID
@@ -517,8 +573,8 @@ const CompanyTable = () => {
                 </DropdownMenu>
               );
             };
-          } else if (config.cell) {
-            column.cell = config.cell;
+          } else if ((config as any).cell) {
+            column.cell = (config as any).cell;
           }
 
           // Add filter component if isFilter is true
@@ -544,7 +600,9 @@ const CompanyTable = () => {
       sorting: memoizedSorting,
       rowSelection,
       columnFilters,
+      columnVisibility,
     },
+    onColumnVisibilityChange: setColumnVisibility,
     columnResizeMode: 'onChange',
     manualPagination: true,
     manualFiltering: true,
@@ -701,7 +759,7 @@ const CompanyTable = () => {
       {/* Company Dialog Components */}
       <CompanyDialog
         open={isAddCompanyDialogOpen}
-        onOpenChange={(open) => {
+        onOpenChange={() => {
           setIsAddCompanyDialogOpen(false);
         }}
         onRefresh={fetchCompanies}
@@ -709,7 +767,7 @@ const CompanyTable = () => {
       
       <CompanyDialog
         open={isEditCompanyDialogOpen}
-        onOpenChange={(open) => {
+        onOpenChange={() => {
           setIsEditCompanyDialogOpen(false);
         }}
         company={isEditCompanyDialogOpen && editingCompany ? {

@@ -27,9 +27,10 @@ function ColumnInputFilter<TData, TValue>({
   defaultOperator = 'like',
   supportedOperators = ['eq', 'ne', 'like'],
 }: ColumnInputFilterProps<TData, TValue>) {
-  const [value, setValue] = useState<string>('');
+  const [value, setValue] = useState<string>();
   const [operator, setOperator] = useState<FilterOperator>(defaultOperator);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const textTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const operatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isUpdatingRef = useRef(false);
   
   // Filter operators for this specific column
@@ -37,35 +38,37 @@ function ColumnInputFilter<TData, TValue>({
     supportedOperators.includes(op.value as FilterOperator)
   );
   
-  // Initialize value and operator from column filter - only when not actively typing
+  // Initialize value and operator from column filter - only for external changes
   useEffect(() => {
-    // Skip synchronization when user is actively typing
+    // Skip synchronization when user is actively updating
     if (isUpdatingRef.current) return;
     
     const filterValue = column.getFilterValue() as { value: string; operator: FilterOperator } | string | undefined;
     
-    if (filterValue === undefined) {
-      // Reset to default state when filter is cleared
-      setValue('');
+    // Only sync when filter is externally cleared (undefined)
+    if (filterValue === undefined && (value !== undefined || operator !== defaultOperator)) {
+      // Reset to default state when filter is cleared externally
+      setValue(undefined);
       setOperator(defaultOperator);
     } else if (typeof filterValue === 'object' && filterValue !== null) {
       if (filterValue.value !== undefined && filterValue.value !== value) {
         setValue(filterValue.value || '');
       }
-      if (filterValue.operator && filterValue.operator !== operator) {
-        setOperator(filterValue.operator);
-      }
     } else if (typeof filterValue === 'string' && filterValue !== value) {
       setValue(filterValue || '');
     }
-  }, [column.getFilterValue(), defaultOperator]); // Add column.getFilterValue() to detect external changes
+    // Don't sync operator changes back to state - let user selection persist
+  }, [column.getFilterValue()]);
   
   // Cleanup function to reset updating flag
   useEffect(() => {
     return () => {
       isUpdatingRef.current = false;
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+      if (textTimeoutRef.current) {
+        clearTimeout(textTimeoutRef.current);
+      }
+      if (operatorTimeoutRef.current) {
+        clearTimeout(operatorTimeoutRef.current);
       }
     };
   }, []);
@@ -84,12 +87,12 @@ function ColumnInputFilter<TData, TValue>({
     setValue(newValue);
     
     // Clear existing timeout
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
+    if (textTimeoutRef.current) {
+      clearTimeout(textTimeoutRef.current);
     }
     
     // Set new timeout with 500ms debounce
-    timeoutRef.current = setTimeout(() => {
+    textTimeoutRef.current = setTimeout(() => {
       const filterData = newValue ? { value: newValue, operator } : undefined;
       column.setFilterValue(filterData);
       // Reset updating flag after API call
@@ -98,13 +101,22 @@ function ColumnInputFilter<TData, TValue>({
   };
 
   const handleOperatorChange = (newOperator: FilterOperator) => {
+    console.log(`🔍 Operator changed from ${operator} to ${newOperator}`);
     isUpdatingRef.current = true;
     setOperator(newOperator);
     
-    // Apply filter immediately when operator changes
-    const filterData = value ? { value, operator: newOperator } : undefined;
-    column.setFilterValue(filterData);
-    isUpdatingRef.current = false;
+    // Clear existing timeout
+    if (operatorTimeoutRef.current) {
+      clearTimeout(operatorTimeoutRef.current);
+    }
+    
+    // Set new timeout with 800ms debounce for operator changes
+    operatorTimeoutRef.current = setTimeout(() => {
+      const filterData = value ? { value, operator: newOperator } : undefined;
+      console.log(`🔍 Applying filter with operator: ${newOperator}, value: ${value}`);
+      column.setFilterValue(filterData);
+      isUpdatingRef.current = false;
+    }, 800);
   };
 
   const handleClear = () => {
@@ -149,7 +161,7 @@ function ColumnInputFilter<TData, TValue>({
       <div className="relative flex-1">
         <Input
           placeholder={placeholder}
-          value={value}
+          value={value || ''}
           onChange={(e) => handleChange(e.target.value)}
           className="h-8 text-sm pe-8"
         />

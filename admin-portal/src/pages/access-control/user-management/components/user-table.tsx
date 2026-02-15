@@ -8,7 +8,6 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   PaginationState,
-  Row,
   RowSelectionState,
   SortingState,
   ColumnFiltersState,
@@ -16,10 +15,10 @@ import {
 } from '@tanstack/react-table';
 import { EllipsisVertical, Settings2, X, Plus, Download, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import { toAbsoluteUrl } from '@/lib/helpers';
+
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { UserDialog } from './user-dialog';
-import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
+
 import { Badge, BadgeDot } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,7 +55,7 @@ import {
   User, 
   PaginatedUsersResponse, 
   ToolbarButtonConfig, 
-  ColumnConfig, 
+
   DataGridConfig 
 } from '@/components/ui/data-grid/data-grid.types';
 
@@ -160,6 +159,17 @@ const UserTable = () => {
   
   // Key to force re-render of filter components when clearing filters
   const [filterResetKey, setFilterResetKey] = useState(0);
+  
+  // Column visibility state with localStorage persistence
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem('user-table-column-visibility');
+    return saved ? JSON.parse(saved) : {};
+  });
+  
+  // Persist column visibility to localStorage
+  useEffect(() => {
+    localStorage.setItem('user-table-column-visibility', JSON.stringify(columnVisibility));
+  }, [columnVisibility]);
   
   // Track if this is the initial render
   const isFirstRender = useRef(true);
@@ -518,7 +528,9 @@ const UserTable = () => {
       sorting: memoizedSorting,
       rowSelection,
       columnFilters,
+      columnVisibility,
     },
+    onColumnVisibilityChange: setColumnVisibility,
     columnResizeMode: 'onChange',
     // Use manual pagination to prevent react-table from managing page state
     manualPagination: true,
@@ -676,7 +688,7 @@ const UserTable = () => {
     {/* Using a single state to track which mode the dialog is in */}
     <UserDialog
       open={isAddUserDialogOpen || isEditUserDialogOpen}
-      onOpenChange={(open) => {
+      onOpenChange={() => {
         // Close both dialogs when the dialog is closed
         setIsAddUserDialogOpen(false);
         setIsEditUserDialogOpen(false);
