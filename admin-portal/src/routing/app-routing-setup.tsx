@@ -79,7 +79,7 @@ import {
   ProjectColumn3Page,
 } from '@/pages/public-profile';
 import { AllProductsPage, DashboardPage } from '@/pages/store-admin';
-import { AccessControlUserManagementPage } from '@/pages/access-control';
+import { AccessControlUserManagementPage, AccessControlCompanyManagementPage } from '@/pages/access-control';
 import {
   MyOrdersPage,
   OrderPlacedPage,
@@ -386,6 +386,10 @@ export function AppRoutingSetup() {
           <Route
             path="/access-control/user-management"
             element={<AccessControlUserManagementPage />}
+          />
+          <Route
+            path="/access-control/company-management"
+            element={<AccessControlCompanyManagementPage />}
           />
         </Route>
       </Route>

@@ -344,7 +344,7 @@ export const SupabaseAdapter = {
         userData.fullname ||
         `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
       occupation: userData.occupation,
-      company_name: userData.company_name || userData.companyName, // Support both formats
+      company_name: userData.company_name,
       phone: userData.phone,
       roles: userData.roles,
       pic: userData.pic,
@@ -374,10 +374,23 @@ export const SupabaseAdapter = {
    * Logout the current user
    */
   async logout(): Promise<void> {
+    // Get the refresh token before clearing local storage
+    const refreshToken = localStorage.getItem('refresh_token');
+    
     // Clear API user data from localStorage
     localStorage.removeItem('api_user_data');
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    
+    // Call the API logout endpoint with refresh token if available
+    if (refreshToken) {
+      try {
+        await authService.logout(refreshToken);
+      } catch (error) {
+        console.error('API logout failed:', error);
+        // Continue with signout even if API logout fails
+      }
+    }
     
     const { error } = await supabase.auth.signOut();
     if (error) throw new Error(error.message);

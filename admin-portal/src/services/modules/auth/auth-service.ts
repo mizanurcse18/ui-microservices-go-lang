@@ -83,8 +83,8 @@ class AuthService extends BaseApiService {
     return await this.postModule<LoginResponse, { refresh_token: string }>('auth', 'refresh', { refresh_token: refreshToken });
   }
 
-  async logout(userId: string): Promise<ApiResponse<any>> {
-    return await this.postModule('auth', 'logout', { userId });
+  async logout(refreshToken: string): Promise<ApiResponse<any>> {
+    return await this.postModule('auth', 'logout', { refresh_token: refreshToken });
   }
 
   async verifyEmail(token: string): Promise<ApiResponse<any>> {

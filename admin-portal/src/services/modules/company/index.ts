@@ -1,0 +1,1 @@
+export { companyService, CompanyService, type Company, type CompanyFilters, type PaginatedCompaniesResponse } from './company-service';
