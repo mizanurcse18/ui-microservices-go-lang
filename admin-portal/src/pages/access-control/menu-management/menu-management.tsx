@@ -79,10 +79,6 @@ export function MenuManagementPage() {
   };
 
   const handleDelete = async (node: MenuItem) => {
-    if (!window.confirm(`Are you sure you want to delete the menu "${node.title}"? This action cannot be undone.`)) {
-      return;
-    }
-
     try {
       const response = await menuService.deleteMenu(node.id || '');
       if (response.success) {

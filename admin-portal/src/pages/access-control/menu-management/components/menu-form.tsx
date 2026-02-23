@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 
 interface MenuFormData {
   id?: string | number;
+  id_str?: string;
   menu_id?: string | number;
   parent_id?: string | number | null;
   title: string;
@@ -43,6 +44,7 @@ export function MenuForm({ open, onOpenChange, menu, parentId, onSave, parents }
   
   const [formData, setFormData] = useState<MenuFormData>({
     id: undefined,
+    id_str: undefined,
     menu_id: undefined,
     parent_id: parentId || null,
     title: '',
@@ -68,6 +70,7 @@ export function MenuForm({ open, onOpenChange, menu, parentId, onSave, parents }
     if (menu) {
       setFormData({
         id: menu.id,
+        id_str: menu.id_str || '',
         menu_id: menu.menu_id,
         parent_id: menu.parent_id || parentId || null,
         title: menu.title,
@@ -88,6 +91,7 @@ export function MenuForm({ open, onOpenChange, menu, parentId, onSave, parents }
       // Reset form when menu is undefined
       setFormData({
         id: undefined,
+        id_str: undefined,
         menu_id: undefined,
         parent_id: parentId || null,
         title: '',
@@ -108,12 +112,12 @@ export function MenuForm({ open, onOpenChange, menu, parentId, onSave, parents }
   }, [menu, parentId]);
 
   const validateForm = (): boolean => {
-    const { id, title, type, url } = formData;
+    const { id_str, title, type, url } = formData;
     let isValid = true;
     const newErrors: Record<string, string> = {};
 
-    if (!isEditMode && (!id || !String(id).trim())) {
-      newErrors.id = 'Menu ID is required';
+    if (!isEditMode && (!id_str || !String(id_str).trim())) {
+      newErrors.id_str = 'Menu ID is required';
       isValid = false;
     }
 
@@ -202,8 +206,8 @@ export function MenuForm({ open, onOpenChange, menu, parentId, onSave, parents }
   const validateField = (field: keyof typeof errors, value: string) => {
     const newErrors = { ...errors };
 
-    if (field === 'id' && !isEditMode && !value.trim()) {
-      newErrors.id = 'Menu ID is required';
+    if (field === 'id_str' && !isEditMode && !value.trim()) {
+      newErrors.id_str = 'Menu ID is required';
     } else if (field === 'title' && !value.trim()) {
       newErrors.title = 'Menu title is required';
     } else if (field === 'url' && formData.type === 'item' && !value.trim()) {
@@ -258,22 +262,20 @@ export function MenuForm({ open, onOpenChange, menu, parentId, onSave, parents }
             </div>
 
             <div>
-              <Label className="text-sm font-medium mb-1.5 block">ID {isEditMode ? '' : '*'}</Label>
+              <Label className="text-sm font-medium mb-1.5 block">ID *</Label>
               <Input
                 placeholder="Enter menu ID (e.g., dashboard-menu)"
-                value={formData.id ? String(formData.id) : ''}
+                value={formData.id_str ? String(formData.id_str) : ''}
                 onChange={(e) => {
-                  handleInputChange('id', e.target.value);
-                  if (errors.id) {
-                    validateField('id', e.target.value);
+                  handleInputChange('id_str', e.target.value);
+                  if (errors.id_str) {
+                    validateField('id_str', e.target.value);
                   }
                 }}
-                onBlur={() => validateField('id', formData.id ? String(formData.id) : '')}
-                disabled={isEditMode}
-                className={errors.id ? 'border-red-500' : ''}
+                onBlur={() => validateField('id_str', formData.id_str ? String(formData.id_str) : '')}
+                className={errors.id_str ? 'border-red-500' : ''}
               />
-              {errors.id && <p className="text-red-500 text-xs mt-1">{errors.id}</p>}
-              {isEditMode && <p className="text-xs text-muted-foreground mt-1">ID cannot be changed for existing menus</p>}
+              {errors.id_str && <p className="text-red-500 text-xs mt-1">{errors.id_str}</p>}
             </div>
 
             <div>
