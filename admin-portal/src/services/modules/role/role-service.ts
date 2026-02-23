@@ -1,28 +1,18 @@
 import { BaseApiService, type ApiResponse } from '../base-api-service';
 
-interface Company {
-  id: string;
+interface Role {
+  id: string | number;
   name: string;
-  domain: string;
-  category: string;
-  seq_no: number;
-  is_default: boolean;
-  status: string;
-  company_status: string;
-  address: string;
-  tin: string;
-  bin: string;
-  company_logo_path: string;
-  email: string;
-  employee_range: string;
-  funded: number;
+  description: string;
+  application_id?: number;
+  company_id: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
-interface CompanyFilters {
+interface RoleFilters {
   search?: string;
-  status?: string;
-  company_status?: string;
-  category?: string;
+  name?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   page?: number;
@@ -30,30 +20,30 @@ interface CompanyFilters {
   columnFilters?: Array<{ id: string; value: any; operator?: string }>;
 }
 
-interface PaginatedCompaniesResponse {
-  companies: Company[];
+interface PaginatedRolesResponse {
+  roles: Role[];
   total: number;
   page: number;
   pageSize: number;
   totalPages: number;
 }
 
-class CompanyService extends BaseApiService {
-  private static instance: CompanyService;
+class RoleService extends BaseApiService {
+  private static instance: RoleService;
   
   private constructor(apiVersion: string = 'v1') {
     // Use the base URL with the API version path
     super(import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080', apiVersion);
   }
 
-  static getInstance(): CompanyService {
-    if (!CompanyService.instance) {
-      CompanyService.instance = new CompanyService();
+  static getInstance(): RoleService {
+    if (!RoleService.instance) {
+      RoleService.instance = new RoleService();
     }
-    return CompanyService.instance;
+    return RoleService.instance;
   }
 
-  async getCompaniesPaginated(filters?: CompanyFilters): Promise<ApiResponse<PaginatedCompaniesResponse>> {
+  async getRolesPaginated(filters?: RoleFilters): Promise<ApiResponse<PaginatedRolesResponse>> {
     const requestBody: Record<string, any> = {};
     
     if (filters?.page !== undefined) {
@@ -80,10 +70,10 @@ class CompanyService extends BaseApiService {
       }));
     }
 
-    console.log('Company service making paginated request with body:', requestBody);
+    console.log('Role service making paginated request with body:', requestBody);
     
     // Use centralized endpoint system with module-aware method
-    const response = await this.postModule<any, any>('auth', 'companies/paginate', requestBody);
+    const response = await this.postModule<any, any>('auth', 'roles/paginate', requestBody);
     
     // Transform the response to match the expected format
     if (response.success && response.data) {
@@ -91,11 +81,11 @@ class CompanyService extends BaseApiService {
       return {
         ...response,
         data: {
-          companies: apiData.data || [],
+          roles: apiData.roles || [],
           total: apiData.total || 0,
           page: apiData.page || 1,
-          pageSize: apiData.page_size || 10,
-          totalPages: apiData.total_pages || 1
+          pageSize: apiData.pageSize || 10,
+          totalPages: apiData.totalPages || 1
         }
       };
     }
@@ -103,8 +93,8 @@ class CompanyService extends BaseApiService {
     return response;
   }
 
-  async getCompanyById(id: string): Promise<ApiResponse<Company>> {
-    const response = await this.getModule<any>('auth', `companies/${id}`);
+  async getAllRoles(): Promise<ApiResponse<Role[]>> {
+    const response = await this.getModule<any>('auth', 'roles');
     
     // Transform the response to match the expected format
     if (response.success && response.data) {
@@ -117,9 +107,23 @@ class CompanyService extends BaseApiService {
     return response;
   }
 
-  async saveCompany(companyData: Company | Omit<Company, 'id'>): Promise<ApiResponse<Company>> {
+  async getRoleById(id: string | number): Promise<ApiResponse<Role>> {
+    const response = await this.getModule<any>('auth', `roles/${id}`);
+    
+    // Transform the response to match the expected format
+    if (response.success && response.data) {
+      return {
+        ...response,
+        data: response.data
+      };
+    }
+    
+    return response;
+  }
+
+  async saveRole(roleData: Role | Omit<Role, 'id' | 'created_at' | 'updated_at'>): Promise<ApiResponse<Role>> {
     // Always use the same endpoint for both create and update
-    const response = await this.postModule<Company, any>('auth', 'companies/save', companyData);
+    const response = await this.postModule<Role, any>('auth', 'roles/create', roleData);
     
     // Transform the response to match the expected format
     if (response.success && response.data) {
@@ -132,8 +136,8 @@ class CompanyService extends BaseApiService {
     return response;
   }
 
-  async deleteCompany(id: string): Promise<ApiResponse<void>> {
-    const response = await this.deleteModule<any>('auth', `companies/${id}`);
+  async deleteRole(id: string | number): Promise<ApiResponse<void>> {
+    const response = await this.deleteModule<any>('auth', `roles/${id}`);
     
     // Transform the response to match the expected format
     if (response.success) {
@@ -148,6 +152,6 @@ class CompanyService extends BaseApiService {
 }
 
 // Singleton instance
-const companyService = CompanyService.getInstance();
+const roleService = RoleService.getInstance();
 
-export { companyService, CompanyService, type Company, type CompanyFilters, type PaginatedCompaniesResponse };
+export { roleService, RoleService, type Role, type RoleFilters, type PaginatedRolesResponse };

@@ -219,6 +219,41 @@ class BaseApiService {
     }
   }
 
+  protected async deleteModule<T = any>(
+    moduleName: string, 
+    endpointKey: string, 
+    headers: HeadersInit = {}
+  ): Promise<ApiResponse<T>> {
+    try {
+      const token = await this.getAuthToken();
+      const apiVersion = import.meta.env.VITE_API_VERSION_PATH || '/api/v1';
+      const endpointPath = `/${moduleName}${apiVersion}/${endpointKey.replace(/^\//, '')}`;
+      const url = this.buildUrl(endpointPath);
+      
+      console.log('Making module DELETE request to:', url);
+      
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          ...this.defaultHeaders,
+          ...headers,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      console.log('Module DELETE response status:', response.status);
+      
+      const result = await this.handleResponse<T>(response);
+      return result;
+    } catch (error) {
+      console.error('Module DELETE request failed:', error);
+      return {
+        error: error instanceof Error ? error.message : 'Network error occurred',
+        success: false,
+      };
+    }
+  }
+
   // Generic PATCH request
   async patch<T = any, D = any>(endpoint: string, data?: D, headers: HeadersInit = {}): Promise<ApiResponse<T>> {
     try {

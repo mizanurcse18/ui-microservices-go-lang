@@ -1,0 +1,1 @@
+export { MenuManagementPage as AccessControlMenuManagementPage } from './menu-management';

@@ -79,7 +79,7 @@ import {
   ProjectColumn3Page,
 } from '@/pages/public-profile';
 import { AllProductsPage, DashboardPage } from '@/pages/store-admin';
-import { AccessControlUserManagementPage, AccessControlCompanyManagementPage } from '@/pages/access-control';
+import { AccessControlUserManagementPage, AccessControlCompanyManagementPage, AccessControlMenuManagementPage } from '@/pages/access-control';
 import {
   MyOrdersPage,
   OrderPlacedPage,
@@ -94,6 +94,7 @@ import {
   WishlistPage,
 } from '@/pages/store-client';
 import { Navigate, Route, Routes } from 'react-router';
+import { AccessControlRoleManagementPage } from '@/pages/access-control/role-management';
 
 export function AppRoutingSetup() {
   return (
@@ -390,6 +391,14 @@ export function AppRoutingSetup() {
           <Route
             path="/access-control/company-management"
             element={<AccessControlCompanyManagementPage />}
+          />
+          <Route
+            path="/access-control/role-management"
+            element={<AccessControlRoleManagementPage />}
+          />
+          <Route
+            path="/access-control/menu-management"
+            element={<AccessControlMenuManagementPage />}
           />
         </Route>
       </Route>

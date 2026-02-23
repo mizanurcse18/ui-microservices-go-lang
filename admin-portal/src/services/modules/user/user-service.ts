@@ -102,9 +102,17 @@ class UserService extends BaseApiService {
   }
 
   async deleteUser(id: string): Promise<ApiResponse<void>> {
-    // For DELETE requests, we might need a deleteModule method
-    // For now, using the existing pattern
-    return await this.delete<void>(`/auth/api/v1/users/${id}`);
+    const response = await this.deleteModule<any>('auth', `users/${id}`);
+    
+    // Transform the response to match the expected format
+    if (response.success) {
+      return {
+        ...response,
+        data: undefined
+      };
+    }
+    
+    return response;
   }
 
   async toggleUserStatus(id: string, status: boolean): Promise<ApiResponse<User>> {
