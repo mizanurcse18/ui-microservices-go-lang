@@ -17,6 +17,11 @@ interface TreeNodeProps {
   onDelete?: (node: MenuItem) => void;
   onConfirmDelete?: (node: MenuItem) => void;
   isEditLoading?: boolean;
+  draggingNodeId?: string | number | null;
+  onDragStart?: (node: MenuItem) => void;
+  onDragEnd?: () => void;
+  onDrop?: (sourceNode: MenuItem, targetNode: MenuItem) => void;
+  onDragOver?: (e: React.DragEvent) => void;
 }
 
 const TreeNode: React.FC<TreeNodeProps> = ({
@@ -30,11 +35,17 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onEdit,
   onDelete,
   onConfirmDelete,
-  isEditLoading = false
+  isEditLoading = false,
+  draggingNodeId,
+  onDragStart,
+  onDragEnd,
+  onDrop,
+  onDragOver
 }) => {
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expandedNodes.has(node.id || '');
   const marginLeft = `${level * 20}px`;
+  const isDragging = draggingNodeId === node.id;
 
   const handleClick = () => {
     if (hasChildren) {
@@ -64,12 +75,49 @@ const TreeNode: React.FC<TreeNodeProps> = ({
     onConfirmDelete?.(node);
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.stopPropagation();
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('application/json', JSON.stringify(node));
+    onDragStart?.(node);
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    e.stopPropagation();
+    onDragEnd?.();
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    onDragOver?.(e);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const droppedNode = JSON.parse(e.dataTransfer.getData('application/json'));
+      if (droppedNode.id !== node.id) {
+        onDrop?.(droppedNode, node);
+      }
+    } catch (error) {
+      console.error('Error parsing dropped data:', error);
+    }
+  };
+
   return (
     <div className="select-none">
       <div
+        draggable
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
         className={`flex items-center py-2 px-3 hover:bg-accent rounded-md cursor-pointer transition-colors group ${
           isExpanded ? 'bg-accent' : ''
-        }`}
+        } ${isDragging ? 'opacity-50 bg-blue-100 dark:bg-blue-900' : ''}`}
         style={{ marginLeft }}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
@@ -153,6 +201,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onEdit={onEdit}
               onDelete={onDelete}
               onConfirmDelete={onConfirmDelete}
+              draggingNodeId={draggingNodeId}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
             />
           ))}
         </div>
@@ -170,6 +223,7 @@ interface MenuTreeViewProps {
   onDelete?: (node: MenuItem) => void;
   onConfirmDelete?: (node: MenuItem) => void;
   isEditLoading?: boolean;
+  onChangeParent?: (sourceNodeId: string | number, newParentId: string | number | null) => void;
 }
 
 export const MenuTreeView: React.FC<MenuTreeViewProps> = ({
@@ -180,11 +234,13 @@ export const MenuTreeView: React.FC<MenuTreeViewProps> = ({
   onEdit,
   onDelete,
   onConfirmDelete,
-  isEditLoading = false
+  isEditLoading = false,
+  onChangeParent
 }) => {
   const [expandedNodes, setExpandedNodes] = useState<Set<string | number>>(new Set());
   const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [draggingNodeId, setDraggingNodeId] = useState<string | number | null>(null);
 
   const toggleExpand = useCallback((id: string | number) => {
     setExpandedNodes(prev => {
@@ -225,6 +281,22 @@ export const MenuTreeView: React.FC<MenuTreeViewProps> = ({
     }
   };
 
+  const handleDragStart = (node: MenuItem) => {
+    setDraggingNodeId(node.id || null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingNodeId(null);
+  };
+
+  const handleDrop = (sourceNode: MenuItem, targetNode: MenuItem) => {
+    if (onChangeParent && targetNode.id) {
+      // Set the target node's ID as the new parent_id for the source node
+      const newParentId = targetNode.id;
+      onChangeParent(sourceNode.id || '', newParentId);
+    }
+  };
+
   return (
     <>
       <div className="space-y-1">
@@ -242,6 +314,10 @@ export const MenuTreeView: React.FC<MenuTreeViewProps> = ({
                 onDelete={onDelete}
                 onConfirmDelete={handleConfirmDelete}
                 isEditLoading={isEditLoading}
+                draggingNodeId={draggingNodeId}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDrop={handleDrop}
               />
             </ContextMenuTrigger>
             <ContextMenuContent>

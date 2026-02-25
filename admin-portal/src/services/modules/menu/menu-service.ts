@@ -265,6 +265,23 @@ class MenuService extends BaseApiService {
     
     return response;
   }
+
+  async changeMenuParent(id: string | number, parentId: string | number | null): Promise<ApiResponse<MenuItem>> {
+    const response = await this.postModule<any, any>('auth', 'menus/change-parent', {
+      id,
+      parent_id: parentId
+    });
+    
+    // Transform the response to match the expected format
+    if (response.success && response.data) {
+      return {
+        ...response,
+        data: response.data
+      };
+    }
+    
+    return response;
+  }
 }
 
 // Singleton instance
